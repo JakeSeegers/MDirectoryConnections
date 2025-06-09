@@ -328,19 +328,19 @@ async function syncWorkspaceTags() {
     }
 }
 
-// Handle remote tag updates
+// 🔧 FIXED: Handle remote tag updates (FIXED PAYLOAD STRUCTURE)
 function handleRemoteTagUpdate(payload) {
-    if (payload.user === collaborationState.currentUser?.name) return;
+    if (payload.payload?.user === collaborationState.currentUser?.name) return;
     
-    showNotification(`${payload.user} added tag "${payload.tag.name}"`);
+    showNotification(`${payload.payload?.user} added tag "${payload.payload?.tag?.name}"`);
     syncWorkspaceTags(); // Refresh tags from server
 }
 
-// Handle remote tag removal
+// 🔧 FIXED: Handle remote tag removal (FIXED PAYLOAD STRUCTURE)
 function handleRemoteTagRemoval(payload) {
-    if (payload.user === collaborationState.currentUser?.name) return;
+    if (payload.payload?.user === collaborationState.currentUser?.name) return;
     
-    showNotification(`${payload.user} removed tag "${payload.tag_name}"`);
+    showNotification(`${payload.payload?.user} removed tag "${payload.payload?.tag_name}"`);
     syncWorkspaceTags(); // Refresh tags from server
 }
 
@@ -443,7 +443,7 @@ window.workspaceCollaboration = {
     joinWorkspace,
     saveTagToWorkspace,
     removeTagFromWorkspace,
-    syncWorkspaceTags,  // ← THIS WAS MISSING!
+    syncWorkspaceTags,  // ← THIS WAS MISSING BEFORE!
     leaveWorkspace,
     collaborationState
 };
