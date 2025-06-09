@@ -9,13 +9,41 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
   <link href="style.css" rel="stylesheet">
 
+  <!-- External Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/6.6.2/fuse.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
   
-  <!-- Supabase JavaScript Client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase JavaScript Client with fallback -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" 
+          onload="console.log('✅ Supabase library loaded successfully')" 
+          onerror="console.error('❌ Failed to load Supabase library from primary CDN')">
+  </script>
+  
+  <!-- Fallback Supabase CDN -->
+  <script>
+    // Fallback loader for Supabase
+    window.addEventListener('load', function() {
+      if (typeof window.supabase === 'undefined' && typeof createClient === 'undefined') {
+        console.warn('⚠️ Primary Supabase CDN failed, trying fallback...');
+        const fallbackScript = document.createElement('script');
+        fallbackScript.src = 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';
+        fallbackScript.onload = () => console.log('✅ Supabase fallback loaded');
+        fallbackScript.onerror = () => console.error('❌ Supabase fallback also failed');
+        document.head.appendChild(fallbackScript);
+      }
+    });
+  </script>
+
+  <!-- Application Scripts (load after external libraries) -->
+  <script src="config.js"></script>
+  <script src="state.js"></script>
+  <script src="utils.js"></script>
+  <script src="ui.js"></script>
+  <script src="data.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="app.js"></script>
 </head>
 <body class="min-h-screen">
   <div id="loading-overlay">
@@ -613,14 +641,6 @@
     <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border"> <span data-content="tag-name"></span>
       <button class="ml-2 inline-flex" data-action="remove-custom-tag">&times;</button> </span>
   </template>
-
-  <script src="config.js"></script>
-  <script src="state.js"></script>
-  <script src="utils.js"></script>
-  <script src="ui.js"></script>
-  <script src="data.js"></script>
-  <script src="supabase-config.js"></script>
-  <script src="app.js"></script>
 
 </body>
 </html>
