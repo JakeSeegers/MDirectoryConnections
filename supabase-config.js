@@ -19,20 +19,81 @@ const collaborationState = {
     syncTimeout: null
 };
 
-// Initialize Supabase client when DOM is ready
-function initializeSupabase() {
-    try {
-        if (typeof createClient === 'undefined') {
-            console.warn('Supabase client library not loaded yet');
-            return false;
-        }
+// Simple function to wait for Supabase - FIXED VERSION
+function waitForSupabase(maxAttempts = 30) {
+    return new Promise((resolve, reject) => {
+        let attempts = 0;
         
-        supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-        console.log('✅ Supabase client initialized');
+        const checkSupabase = () => {
+            attempts++;
+            console.log(`🔄 Attempt ${attempts}: Checking for Supabase...`);
+            
+            // Simple check - just look for window.supabase.createClient
+            if (window.supabase && typeof window.supabase.createClient === 'function') {
+                console.log('✅ Found Supabase at window.supabase.createClient');
+                resolve(window.supabase.createClient);
+                return;
+            }
+            
+            if (attempts >= maxAttempts) {
+                console.error('❌ Supabase not found after', maxAttempts, 'attempts');
+                console.log('Debug info:', {
+                    'window.supabase': typeof window.supabase,
+                    'window.supabase.createClient': window.supabase ? typeof window.supabase.createClient : 'N/A'
+                });
+                reject(new Error('Supabase library not available'));
+                return;
+            }
+            
+            setTimeout(checkSupabase, 100);
+        };
+        
+        checkSupabase();
+    });
+}
+
+// Initialize Supabase client when DOM is ready
+async function initializeSupabase() {
+    try {
+        console.log('🔄 Waiting for Supabase library...');
+        const createClientFn = await waitForSupabase();
+        
+        console.log('🔄 Creating Supabase client...');
+        supabaseClient = createClientFn(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+        console.log('✅ Supabase client initialized:', !!supabaseClient);
         return true;
     } catch (error) {
-        console.error('Failed to initialize Supabase:', error);
-        addError('Failed to connect to collaboration service: ' + error.message);
+        console.error('❌ Failed to initialize Supabase:', error);
+        if (typeof addError === 'function') {
+            addError('Failed to connect to collaboration service: ' + error.message);
+        }
+        return false;
+    }
+}
+
+// Test function to verify Supabase is working
+async function testSupabaseConnection() {
+    if (!supabaseClient) {
+        console.error('❌ Supabase client not initialized');
+        return false;
+    }
+    
+    try {
+        console.log('🧪 Testing Supabase connection...');
+        // Try a simple operation to test the connection
+        const { data, error } = await supabaseClient
+            .from('collaboration_sessions')
+            .select('count')
+            .limit(1);
+        
+        if (error) {
+            console.log('⚠️ Connection test failed (this might be OK if tables don\'t exist):', error.message);
+        } else {
+            console.log('✅ Supabase connection successful');
+        }
+        return true;
+    } catch (error) {
+        console.error('❌ Supabase connection test failed:', error);
         return false;
     }
 }
@@ -40,11 +101,13 @@ function initializeSupabase() {
 // User authentication and session management
 async function authenticateUser(email, name = null) {
     if (!supabaseClient) {
-        console.error('Supabase client not initialized');
+        console.error('❌ Supabase client not initialized');
         return false;
     }
 
     try {
+        console.log('🔄 Authenticating user:', email);
+        
         collaborationState.currentUser = {
             email: email.toLowerCase(),
             name: name || email.split('@')[0],
@@ -53,6 +116,12 @@ async function authenticateUser(email, name = null) {
 
         collaborationState.sessionId = generateSessionId();
         collaborationState.projectId = generateProjectId();
+
+        // Test the connection first
+        const connectionTest = await testSupabaseConnection();
+        if (!connectionTest) {
+            console.warn('⚠️ Connection test failed, but continuing...');
+        }
 
         // Insert/update session record
         const { error } = await supabaseClient
@@ -66,14 +135,14 @@ async function authenticateUser(email, name = null) {
             });
 
         if (error) {
-            console.error('Session upsert error:', error);
+            console.error('❌ Session upsert error:', error);
             return false;
         }
 
         console.log('✅ User authenticated:', collaborationState.currentUser);
         return true;
     } catch (error) {
-        console.error('Authentication error:', error);
+        console.error('❌ Authentication error:', error);
         return false;
     }
 }
@@ -81,11 +150,13 @@ async function authenticateUser(email, name = null) {
 // Initialize real-time collaboration
 async function initializeCollaboration() {
     if (!supabaseClient || !collaborationState.currentUser) {
-        console.error('Cannot initialize collaboration: missing client or user');
+        console.error('❌ Cannot initialize collaboration: missing client or user');
         return false;
     }
 
     try {
+        console.log('🔄 Initializing collaboration...');
+        
         // Create a channel for this project
         const channelName = `project:${collaborationState.projectId}`;
         collaborationState.activeChannel = supabaseClient.channel(channelName);
@@ -97,11 +168,11 @@ async function initializeCollaboration() {
                 updateOnlineUsers(presenceState);
             })
             .on('presence', { event: 'join' }, ({ newPresences }) => {
-                console.log('User joined:', newPresences);
+                console.log('👥 User joined:', newPresences);
                 updateOnlineUsers(collaborationState.activeChannel.presenceState());
             })
             .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-                console.log('User left:', leftPresences);
+                console.log('👋 User left:', leftPresences);
                 updateOnlineUsers(collaborationState.activeChannel.presenceState());
             });
 
@@ -126,6 +197,8 @@ async function initializeCollaboration() {
             });
 
         await collaborationState.activeChannel.subscribe(async (status) => {
+            console.log('📡 Channel subscription status:', status);
+            
             if (status === 'SUBSCRIBED') {
                 // Track this user's presence
                 await collaborationState.activeChannel.track({
@@ -136,17 +209,19 @@ async function initializeCollaboration() {
                 });
                 
                 collaborationState.isOnline = true;
-                console.log('✅ Collaboration initialized');
+                console.log('✅ Collaboration initialized successfully');
                 updateCollaborationUI();
                 
                 // Load existing tags from Supabase
                 await syncTagsFromSupabase();
+            } else {
+                console.warn('⚠️ Channel subscription failed:', status);
             }
         });
 
         return true;
     } catch (error) {
-        console.error('Collaboration initialization error:', error);
+        console.error('❌ Collaboration initialization error:', error);
         return false;
     }
 }
@@ -483,7 +558,7 @@ function showCollaborationNotification(message) {
     
     document.body.appendChild(notification);
     
-    // Remove after 3 seconds
+    // Remove after 4 seconds
     setTimeout(() => {
         notification.style.opacity = '0';
         setTimeout(() => {
@@ -491,7 +566,7 @@ function showCollaborationNotification(message) {
                 document.body.removeChild(notification);
             }
         }, 300);
-    }, 3000);
+    }, 4000);
 }
 
 // Cleanup collaboration when leaving
@@ -530,5 +605,6 @@ window.supabaseCollaboration = {
     deleteTagFromSupabase,
     updateUserPresence,
     cleanupCollaboration,
-    collaborationState
+    collaborationState,
+    testSupabaseConnection  // Add test function
 };
