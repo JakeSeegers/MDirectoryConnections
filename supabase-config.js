@@ -1,166 +1,134 @@
-// --- SUPABASE CONFIGURATION AND SETUP ---
+// --- WORKSPACE-BASED COLLABORATION SYSTEM ---
+// Replace your existing supabase-config.js with this workspace approach
 
-// Supabase configuration - UPDATE THESE WITH YOUR PROJECT DETAILS
+// Supabase configuration
 const SUPABASE_URL = 'https://pzcqsorfobygydxkdmzc.supabase.co';
 const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6Y3Fzb3Jmb2J5Z3lkeGtkbXpjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTA0NTY1NiwiZXhwIjoyMDY0NjIxNjU2fQ.QLyhYgHbshBHYtrun8G6w4m1dRQvFaw3QfdZnLDePhA';
 
-// Create Supabase client - we'll initialize this after the library loads
 let supabaseClient = null;
 
 // Collaboration state
 const collaborationState = {
-    currentUser: null,
     isOnline: false,
+    currentWorkspace: null,
+    currentUser: null,
     connectedUsers: new Map(),
-    activeChannel: null,
-    sessionId: null,
-    projectId: null,
-    lastActivity: Date.now(),
-    syncTimeout: null
+    activeChannel: null
 };
 
-// Simple function to wait for Supabase - FIXED VERSION
-function waitForSupabase(maxAttempts = 30) {
-    return new Promise((resolve, reject) => {
-        let attempts = 0;
-        
-        const checkSupabase = () => {
-            attempts++;
-            console.log(`🔄 Attempt ${attempts}: Checking for Supabase...`);
-            
-            // Simple check - just look for window.supabase.createClient
-            if (window.supabase && typeof window.supabase.createClient === 'function') {
-                console.log('✅ Found Supabase at window.supabase.createClient');
-                resolve(window.supabase.createClient);
-                return;
-            }
-            
-            if (attempts >= maxAttempts) {
-                console.error('❌ Supabase not found after', maxAttempts, 'attempts');
-                console.log('Debug info:', {
-                    'window.supabase': typeof window.supabase,
-                    'window.supabase.createClient': window.supabase ? typeof window.supabase.createClient : 'N/A'
-                });
-                reject(new Error('Supabase library not available'));
-                return;
-            }
-            
-            setTimeout(checkSupabase, 100);
-        };
-        
-        checkSupabase();
-    });
-}
-
-// Initialize Supabase client when DOM is ready
+// Initialize Supabase
 async function initializeSupabase() {
     try {
-        console.log('🔄 Waiting for Supabase library...');
-        const createClientFn = await waitForSupabase();
+        console.log('🔄 Initializing Supabase...');
         
-        console.log('🔄 Creating Supabase client...');
-        supabaseClient = createClientFn(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-        console.log('✅ Supabase client initialized:', !!supabaseClient);
-        return true;
-    } catch (error) {
-        console.error('❌ Failed to initialize Supabase:', error);
-        if (typeof addError === 'function') {
-            addError('Failed to connect to collaboration service: ' + error.message);
+        // Wait for Supabase library
+        let attempts = 0;
+        while (attempts < 30) {
+            if (window.supabase && typeof window.supabase.createClient === 'function') {
+                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+                console.log('✅ Supabase initialized');
+                return true;
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
         }
+        
+        throw new Error('Supabase library not available');
+    } catch (error) {
+        console.error('❌ Supabase initialization failed:', error);
         return false;
     }
 }
 
-// Test function to verify Supabase is working
-async function testSupabaseConnection() {
-    if (!supabaseClient) {
-        console.error('❌ Supabase client not initialized');
-        return false;
-    }
+// Create a new workspace
+async function createWorkspace(workspaceName, password, creatorName) {
+    if (!supabaseClient) return { success: false, error: 'Supabase not initialized' };
     
     try {
-        console.log('🧪 Testing Supabase connection...');
-        // Try a simple operation to test the connection
-        const { data, error } = await supabaseClient
-            .from('collaboration_sessions')
-            .select('count')
-            .limit(1);
+        console.log('🔄 Creating workspace:', workspaceName);
         
-        if (error) {
-            console.log('⚠️ Connection test failed (this might be OK if tables don\'t exist):', error.message);
-        } else {
-            console.log('✅ Supabase connection successful');
+        // Check if workspace already exists
+        const { data: existing } = await supabaseClient
+            .from('workspaces')
+            .select('id')
+            .eq('name', workspaceName)
+            .single();
+            
+        if (existing) {
+            return { success: false, error: 'Workspace name already exists' };
         }
-        return true;
+        
+        // Create workspace
+        const { data: workspace, error } = await supabaseClient
+            .from('workspaces')
+            .insert({
+                name: workspaceName,
+                password_hash: btoa(password), // Simple encoding (not secure, but demo-friendly)
+                created_by: creatorName,
+                created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+            
+        if (error) throw error;
+        
+        console.log('✅ Workspace created:', workspaceName);
+        return { success: true, workspace };
+        
     } catch (error) {
-        console.error('❌ Supabase connection test failed:', error);
-        return false;
+        console.error('❌ Error creating workspace:', error);
+        return { success: false, error: error.message };
     }
 }
 
-// User authentication and session management
-async function authenticateUser(email, name = null) {
-    if (!supabaseClient) {
-        console.error('❌ Supabase client not initialized');
-        return false;
-    }
-
+// Join a workspace
+async function joinWorkspace(workspaceName, password, userName) {
+    if (!supabaseClient) return { success: false, error: 'Supabase not initialized' };
+    
     try {
-        console.log('🔄 Authenticating user:', email);
+        console.log('🔄 Joining workspace:', workspaceName);
         
+        // Find workspace and verify password
+        const { data: workspace, error } = await supabaseClient
+            .from('workspaces')
+            .select('*')
+            .eq('name', workspaceName)
+            .single();
+            
+        if (error || !workspace) {
+            return { success: false, error: 'Workspace not found' };
+        }
+        
+        // Check password
+        if (atob(workspace.password_hash) !== password) {
+            return { success: false, error: 'Incorrect password' };
+        }
+        
+        // Set up user and workspace
+        collaborationState.currentWorkspace = workspace;
         collaborationState.currentUser = {
-            email: email.toLowerCase(),
-            name: name || email.split('@')[0],
+            name: userName,
             joinedAt: new Date().toISOString()
         };
-
-        collaborationState.sessionId = generateSessionId();
-        collaborationState.projectId = generateProjectId();
-
-        // Test the connection first
-        const connectionTest = await testSupabaseConnection();
-        if (!connectionTest) {
-            console.warn('⚠️ Connection test failed, but continuing...');
-        }
-
-        // Insert/update session record
-        const { error } = await supabaseClient
-            .from('collaboration_sessions')
-            .upsert({
-                project_id: collaborationState.projectId,
-                user_email: collaborationState.currentUser.email,
-                user_name: collaborationState.currentUser.name,
-                last_activity: new Date().toISOString(),
-                is_active: true
-            });
-
-        if (error) {
-            console.error('❌ Session upsert error:', error);
-            return false;
-        }
-
-        console.log('✅ User authenticated:', collaborationState.currentUser);
-        return true;
+        
+        // Initialize real-time collaboration
+        await initializeRealtimeCollaboration(workspace.id);
+        
+        console.log('✅ Joined workspace:', workspaceName);
+        return { success: true, workspace };
+        
     } catch (error) {
-        console.error('❌ Authentication error:', error);
-        return false;
+        console.error('❌ Error joining workspace:', error);
+        return { success: false, error: error.message };
     }
 }
 
-// Initialize real-time collaboration
-async function initializeCollaboration() {
-    if (!supabaseClient || !collaborationState.currentUser) {
-        console.error('❌ Cannot initialize collaboration: missing client or user');
-        return false;
-    }
-
+// Initialize real-time collaboration for workspace
+async function initializeRealtimeCollaboration(workspaceId) {
     try {
-        console.log('🔄 Initializing collaboration...');
-        
-        // Create a channel for this project
-        const channelName = `project:${collaborationState.projectId}`;
+        const channelName = `workspace_${workspaceId}`;
         collaborationState.activeChannel = supabaseClient.channel(channelName);
-
+        
         // Subscribe to presence (who's online)
         collaborationState.activeChannel
             .on('presence', { event: 'sync' }, () => {
@@ -168,73 +136,201 @@ async function initializeCollaboration() {
                 updateOnlineUsers(presenceState);
             })
             .on('presence', { event: 'join' }, ({ newPresences }) => {
-                console.log('👥 User joined:', newPresences);
+                console.log('👥 User joined workspace:', newPresences);
                 updateOnlineUsers(collaborationState.activeChannel.presenceState());
+                showNotification(`${newPresences[0].user_name} joined the workspace`);
             })
             .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-                console.log('👋 User left:', leftPresences);
+                console.log('👋 User left workspace:', leftPresences);
                 updateOnlineUsers(collaborationState.activeChannel.presenceState());
+                showNotification(`${leftPresences[0].user_name} left the workspace`);
             });
-
+        
         // Subscribe to tag updates
         collaborationState.activeChannel
-            .on('broadcast', { event: 'tag_updated' }, (payload) => {
+            .on('broadcast', { event: 'tag_added' }, (payload) => {
+                console.log('📥 Tag added:', payload);
                 handleRemoteTagUpdate(payload);
             })
-            .on('broadcast', { event: 'tag_deleted' }, (payload) => {
-                handleRemoteTagDeletion(payload);
+            .on('broadcast', { event: 'tag_removed' }, (payload) => {
+                console.log('📥 Tag removed:', payload);
+                handleRemoteTagRemoval(payload);
             });
-
-        // Subscribe to database changes
+        
+        // Subscribe to database changes for this workspace
         collaborationState.activeChannel
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
-                table: 'collaborative_tags',
-                filter: `project_id=eq.${collaborationState.projectId}`
+                table: 'workspace_tags',
+                filter: `workspace_id=eq.${workspaceId}`
             }, (payload) => {
-                handleDatabaseChange(payload);
+                console.log('📊 Database change:', payload);
+                syncWorkspaceTags();
             });
-
+        
         await collaborationState.activeChannel.subscribe(async (status) => {
-            console.log('📡 Channel subscription status:', status);
-            
             if (status === 'SUBSCRIBED') {
-                // Track this user's presence
+                // Track user presence
                 await collaborationState.activeChannel.track({
-                    user_email: collaborationState.currentUser.email,
                     user_name: collaborationState.currentUser.name,
-                    online_at: new Date().toISOString(),
-                    current_room: null
+                    joined_at: collaborationState.currentUser.joinedAt
                 });
                 
                 collaborationState.isOnline = true;
-                console.log('✅ Collaboration initialized successfully');
                 updateCollaborationUI();
                 
-                // Load existing tags from Supabase
-                await syncTagsFromSupabase();
-            } else {
-                console.warn('⚠️ Channel subscription failed:', status);
+                // Load existing workspace tags
+                await syncWorkspaceTags();
+                
+                console.log('✅ Real-time collaboration active');
+                showNotification('✅ Connected to workspace!');
             }
         });
-
-        return true;
+        
     } catch (error) {
-        console.error('❌ Collaboration initialization error:', error);
+        console.error('❌ Real-time collaboration error:', error);
+    }
+}
+
+// Save tag to workspace
+async function saveTagToWorkspace(roomId, tagObject) {
+    if (!supabaseClient || !collaborationState.currentWorkspace) return false;
+    
+    try {
+        const room = state.processedData.find(r => r.id === roomId);
+        if (!room) return false;
+        
+        const tagData = {
+            workspace_id: collaborationState.currentWorkspace.id,
+            room_identifier: room.rmrecnbr || room.id,
+            tag_name: tagObject.name,
+            tag_type: tagObject.type || 'simple',
+            tag_data: JSON.stringify(tagObject),
+            created_by: collaborationState.currentUser.name,
+            created_at: new Date().toISOString()
+        };
+        
+        const { error } = await supabaseClient
+            .from('workspace_tags')
+            .insert(tagData);
+            
+        if (error) throw error;
+        
+        // Broadcast to other users
+        await collaborationState.activeChannel.send({
+            type: 'broadcast',
+            event: 'tag_added',
+            payload: {
+                room_id: roomId,
+                tag: tagObject,
+                user: collaborationState.currentUser.name
+            }
+        });
+        
+        console.log('✅ Tag saved to workspace:', tagObject.name);
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Error saving tag to workspace:', error);
         return false;
     }
 }
 
-// Generate session and project IDs
-function generateSessionId() {
-    return 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+// Remove tag from workspace
+async function removeTagFromWorkspace(roomId, tagObject) {
+    if (!supabaseClient || !collaborationState.currentWorkspace) return false;
+    
+    try {
+        const room = state.processedData.find(r => r.id === roomId);
+        if (!room) return false;
+        
+        const { error } = await supabaseClient
+            .from('workspace_tags')
+            .delete()
+            .eq('workspace_id', collaborationState.currentWorkspace.id)
+            .eq('room_identifier', room.rmrecnbr || room.id)
+            .eq('tag_name', tagObject.name);
+            
+        if (error) throw error;
+        
+        // Broadcast to other users
+        await collaborationState.activeChannel.send({
+            type: 'broadcast',
+            event: 'tag_removed',
+            payload: {
+                room_id: roomId,
+                tag_name: tagObject.name,
+                user: collaborationState.currentUser.name
+            }
+        });
+        
+        console.log('✅ Tag removed from workspace:', tagObject.name);
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Error removing tag from workspace:', error);
+        return false;
+    }
 }
 
-function generateProjectId() {
-    // Use building names or a hash of the loaded data to create consistent project IDs
-    const buildings = state.availableBuildings.join('_');
-    return buildings ? 'project_' + btoa(buildings).substring(0, 10) : 'default_project';
+// Sync workspace tags to local state
+async function syncWorkspaceTags() {
+    if (!supabaseClient || !collaborationState.currentWorkspace) return;
+    
+    try {
+        const { data: tags, error } = await supabaseClient
+            .from('workspace_tags')
+            .select('*')
+            .eq('workspace_id', collaborationState.currentWorkspace.id);
+            
+        if (error) throw error;
+        
+        // Clear existing workspace tags and rebuild
+        Object.keys(state.customTags).forEach(roomId => {
+            state.customTags[roomId] = state.customTags[roomId].filter(tag => !tag.workspace);
+        });
+        
+        // Add workspace tags
+        tags.forEach(dbTag => {
+            const roomId = findRoomIdByIdentifier(dbTag.room_identifier);
+            if (roomId) {
+                if (!state.customTags[roomId]) state.customTags[roomId] = [];
+                
+                const tagObject = JSON.parse(dbTag.tag_data);
+                tagObject.workspace = true;
+                tagObject.created_by = dbTag.created_by;
+                
+                state.customTags[roomId].push(tagObject);
+            }
+        });
+        
+        // Update UI
+        if (typeof updateResults === 'function') {
+            updateResults();
+        }
+        
+        console.log(`✅ Synced ${tags.length} workspace tags`);
+        
+    } catch (error) {
+        console.error('❌ Error syncing workspace tags:', error);
+    }
+}
+
+// Handle remote tag updates
+function handleRemoteTagUpdate(payload) {
+    if (payload.user === collaborationState.currentUser?.name) return;
+    
+    showNotification(`${payload.user} added tag "${payload.tag.name}"`);
+    syncWorkspaceTags(); // Refresh tags from server
+}
+
+// Handle remote tag removal
+function handleRemoteTagRemoval(payload) {
+    if (payload.user === collaborationState.currentUser?.name) return;
+    
+    showNotification(`${payload.user} removed tag "${payload.tag_name}"`);
+    syncWorkspaceTags(); // Refresh tags from server
 }
 
 // Update online users display
@@ -243,308 +339,65 @@ function updateOnlineUsers(presenceState) {
     
     Object.values(presenceState).forEach(presenceList => {
         presenceList.forEach(presence => {
-            collaborationState.connectedUsers.set(presence.user_email, {
-                email: presence.user_email,
-                name: presence.user_name,
-                online_at: presence.online_at,
-                current_room: presence.current_room
-            });
+            collaborationState.connectedUsers.set(presence.user_name, presence);
         });
     });
-
+    
     updateCollaborationUI();
 }
 
-// Update collaboration UI elements
+// Update collaboration UI
 function updateCollaborationUI() {
     const statusElement = document.getElementById('collaboration-status');
-    if (statusElement) {
+    if (statusElement && collaborationState.isOnline) {
         const onlineCount = collaborationState.connectedUsers.size;
-        const statusClass = collaborationState.isOnline ? 'text-green-600' : 'text-red-600';
-        const statusText = collaborationState.isOnline ? 'Connected' : 'Offline';
+        const workspaceName = collaborationState.currentWorkspace?.name || 'Unknown';
         
         statusElement.innerHTML = `
-            <div class="flex items-center gap-2">
-                <div class="w-2 h-2 rounded-full ${collaborationState.isOnline ? 'bg-green-500' : 'bg-red-500'}"></div>
-                <span class="${statusClass} text-sm font-medium">${statusText}</span>
-                ${onlineCount > 0 ? `<span class="text-gray-500 text-sm">(${onlineCount} online)</span>` : ''}
+            <div class="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <h4 class="font-medium text-green-800 mb-2 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"/>
+                    </svg>
+                    Connected to "${workspaceName}"
+                </h4>
+                <p class="text-green-700 text-sm mb-2">Sharing tags with ${onlineCount} team member${onlineCount !== 1 ? 's' : ''}</p>
+                <div class="space-y-1">
+                    ${Array.from(collaborationState.connectedUsers.values())
+                        .map(user => `
+                            <div class="flex items-center gap-2 text-sm text-green-600">
+                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                                ${sanitizeHTML(user.user_name)}
+                            </div>
+                        `).join('')}
+                </div>
+                <button onclick="leaveWorkspace()" class="mt-2 text-xs text-red-600 hover:text-red-800 underline">
+                    Leave Workspace
+                </button>
             </div>
         `;
+        statusElement.classList.remove('hidden');
+    } else {
+        if (statusElement) statusElement.classList.add('hidden');
     }
-
-    const usersElement = document.getElementById('online-users');
-    if (usersElement && collaborationState.connectedUsers.size > 0) {
-        usersElement.innerHTML = Array.from(collaborationState.connectedUsers.values())
-            .map(user => `
-                <div class="flex items-center gap-2 text-sm">
-                    <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                    <span>${sanitizeHTML(user.name)}</span>
-                </div>
-            `).join('');
-    }
-}
-
-// Sync tags from Supabase to local state
-async function syncTagsFromSupabase() {
-    if (!supabaseClient || !collaborationState.projectId) return;
-
-    try {
-        const { data: tags, error } = await supabaseClient
-            .from('collaborative_tags')
-            .select('*')
-            .eq('project_id', collaborationState.projectId)
-            .eq('is_active', true);
-
-        if (error) {
-            console.error('Error syncing tags:', error);
-            return;
-        }
-
-        // Convert Supabase tags to local format and merge with existing custom tags
-        if (tags) {
-            tags.forEach(dbTag => {
-                const roomId = findRoomIdByIdentifier(dbTag.room_identifier);
-                if (roomId) {
-                    if (!state.customTags[roomId]) {
-                        state.customTags[roomId] = [];
-                    }
-
-                    // Check if tag already exists locally
-                    const existingIndex = state.customTags[roomId].findIndex(
-                        localTag => localTag.name === dbTag.tag_name
-                    );
-
-                    const tagObject = {
-                        id: dbTag.id,
-                        name: dbTag.tag_name,
-                        type: dbTag.tag_type,
-                        description: dbTag.description || '',
-                        link: dbTag.link || '',
-                        contact: dbTag.contact || '',
-                        imageUrl: dbTag.image_url || '',
-                        color: dbTag.color,
-                        created: dbTag.created_at,
-                        isRich: dbTag.tag_type !== 'simple' || !!dbTag.description || !!dbTag.link || !!dbTag.contact || !!dbTag.image_url,
-                        collaborative: true,
-                        created_by: dbTag.created_by
-                    };
-
-                    if (existingIndex >= 0) {
-                        // Update existing tag
-                        state.customTags[roomId][existingIndex] = tagObject;
-                    } else {
-                        // Add new tag
-                        state.customTags[roomId].push(tagObject);
-                    }
-                }
-            });
-
-            // Update search index and UI
-            await createSearchIndex();
-            if (typeof updateResults === 'function') {
-                updateResults();
-            }
-            
-            console.log(`✅ Synced ${tags.length} collaborative tags`);
-        }
-    } catch (error) {
-        console.error('Sync error:', error);
-    }
-}
-
-// Find room ID by various identifiers
-function findRoomIdByIdentifier(identifier) {
-    // Try to find room by rmrecnbr first, then by room.id
-    let room = state.processedData.find(r => String(r.rmrecnbr) === String(identifier));
-    if (!room) {
-        room = state.processedData.find(r => String(r.id) === String(identifier));
-    }
-    if (!room) {
-        room = state.processedData.find(r => String(r.rmnbr) === String(identifier));
-    }
-    return room ? room.id : null;
-}
-
-// Save tag to Supabase
-async function saveTagToSupabase(roomId, tagObject) {
-    if (!supabaseClient || !collaborationState.currentUser) return false;
-
-    try {
-        const room = state.processedData.find(r => r.id === roomId);
-        if (!room) return false;
-
-        const roomIdentifier = room.rmrecnbr || room.id;
-        
-        const tagData = {
-            room_identifier: String(roomIdentifier),
-            tag_name: tagObject.name,
-            tag_type: tagObject.type || 'simple',
-            description: tagObject.description || null,
-            link: tagObject.link || null,
-            contact: tagObject.contact || null,
-            image_url: tagObject.imageUrl || null,
-            color: tagObject.color || 'blue',
-            created_by: collaborationState.currentUser.email,
-            updated_by: collaborationState.currentUser.email,
-            project_id: collaborationState.projectId,
-            is_active: true
-        };
-
-        const { data, error } = await supabaseClient
-            .from('collaborative_tags')
-            .upsert(tagData)
-            .select();
-
-        if (error) {
-            console.error('Error saving tag to Supabase:', error);
-            return false;
-        }
-
-        // Broadcast the update to other users
-        if (collaborationState.activeChannel) {
-            await collaborationState.activeChannel.send({
-                type: 'broadcast',
-                event: 'tag_updated',
-                payload: {
-                    room_id: roomId,
-                    tag: tagObject,
-                    user: collaborationState.currentUser
-                }
-            });
-        }
-
-        // Log the activity
-        await logTagActivity(roomIdentifier, 'added', tagObject.name, null, tagData);
-
-        console.log('✅ Tag saved to Supabase:', tagObject.name);
-        return true;
-    } catch (error) {
-        console.error('Save tag error:', error);
-        return false;
-    }
-}
-
-// Delete tag from Supabase
-async function deleteTagFromSupabase(roomId, tagObject) {
-    if (!supabaseClient || !collaborationState.currentUser) return false;
-
-    try {
-        const room = state.processedData.find(r => r.id === roomId);
-        if (!room) return false;
-
-        const roomIdentifier = room.rmrecnbr || room.id;
-
-        const { error } = await supabaseClient
-            .from('collaborative_tags')
-            .update({ is_active: false, updated_by: collaborationState.currentUser.email })
-            .eq('room_identifier', String(roomIdentifier))
-            .eq('tag_name', tagObject.name)
-            .eq('project_id', collaborationState.projectId);
-
-        if (error) {
-            console.error('Error deleting tag from Supabase:', error);
-            return false;
-        }
-
-        // Broadcast the deletion to other users
-        if (collaborationState.activeChannel) {
-            await collaborationState.activeChannel.send({
-                type: 'broadcast',
-                event: 'tag_deleted',
-                payload: {
-                    room_id: roomId,
-                    tag_name: tagObject.name,
-                    user: collaborationState.currentUser
-                }
-            });
-        }
-
-        // Log the activity
-        await logTagActivity(roomIdentifier, 'deleted', tagObject.name, tagObject, null);
-
-        console.log('✅ Tag deleted from Supabase:', tagObject.name);
-        return true;
-    } catch (error) {
-        console.error('Delete tag error:', error);
-        return false;
-    }
-}
-
-// Handle remote tag updates
-function handleRemoteTagUpdate(payload) {
-    if (payload.user?.email === collaborationState.currentUser?.email) {
-        return; // Ignore our own updates
-    }
-
-    console.log('📥 Remote tag update:', payload);
     
-    // Show notification
-    showCollaborationNotification(`${payload.user?.name || 'Someone'} added tag "${payload.tag.name}"`);
-    
-    // The database change will trigger a sync, so we don't need to manually update here
-}
-
-// Handle remote tag deletions
-function handleRemoteTagDeletion(payload) {
-    if (payload.user?.email === collaborationState.currentUser?.email) {
-        return; // Ignore our own deletions
-    }
-
-    console.log('📥 Remote tag deletion:', payload);
-    
-    // Show notification
-    showCollaborationNotification(`${payload.user?.name || 'Someone'} removed tag "${payload.tag_name}"`);
-    
-    // Remove from local state
-    const roomTags = state.customTags[payload.room_id];
-    if (roomTags) {
-        const index = roomTags.findIndex(tag => tag.name === payload.tag_name);
-        if (index >= 0) {
-            roomTags.splice(index, 1);
-            // Update UI
-            if (typeof updateResults === 'function') {
-                updateResults();
-            }
+    // Update collaboration button
+    const collabButton = document.getElementById('collaboration-btn');
+    if (collabButton) {
+        if (collaborationState.isOnline) {
+            collabButton.textContent = `Connected: ${collaborationState.currentWorkspace?.name}`;
+            collabButton.classList.remove('um-button-blue');
+            collabButton.classList.add('um-button-maize');
+        } else {
+            collabButton.textContent = 'Join Workspace';
+            collabButton.classList.remove('um-button-maize');
+            collabButton.classList.add('um-button-blue');
         }
     }
 }
 
-// Handle database changes (backup sync mechanism)
-function handleDatabaseChange(payload) {
-    console.log('📊 Database change:', payload);
-    
-    // Debounce rapid changes
-    clearTimeout(collaborationState.syncTimeout);
-    collaborationState.syncTimeout = setTimeout(() => {
-        syncTagsFromSupabase();
-    }, 1000);
-}
-
-// Log tag activity
-async function logTagActivity(roomIdentifier, action, tagName, oldData, newData) {
-    if (!supabaseClient || !collaborationState.currentUser) return;
-
-    try {
-        await supabaseClient
-            .from('tag_activity_log')
-            .insert({
-                project_id: collaborationState.projectId,
-                room_identifier: String(roomIdentifier),
-                action: action,
-                tag_name: tagName,
-                user_email: collaborationState.currentUser.email,
-                user_name: collaborationState.currentUser.name,
-                old_data: oldData,
-                new_data: newData
-            });
-    } catch (error) {
-        console.error('Error logging activity:', error);
-    }
-}
-
-// Show collaboration notifications
-function showCollaborationNotification(message) {
-    // Create a toast notification
+// Show notifications
+function showNotification(message) {
     const notification = document.createElement('div');
     notification.className = 'fixed top-16 right-4 bg-blue-100 border border-blue-300 text-blue-800 px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in';
     notification.innerHTML = `
@@ -558,7 +411,6 @@ function showCollaborationNotification(message) {
     
     document.body.appendChild(notification);
     
-    // Remove after 4 seconds
     setTimeout(() => {
         notification.style.opacity = '0';
         setTimeout(() => {
@@ -566,45 +418,48 @@ function showCollaborationNotification(message) {
                 document.body.removeChild(notification);
             }
         }, 300);
-    }, 4000);
+    }, 3000);
 }
 
-// Cleanup collaboration when leaving
-function cleanupCollaboration() {
+// Utility function to find room by identifier
+function findRoomIdByIdentifier(identifier) {
+    let room = state.processedData.find(r => String(r.rmrecnbr) === String(identifier));
+    if (!room) room = state.processedData.find(r => String(r.id) === String(identifier));
+    if (!room) room = state.processedData.find(r => String(r.rmnbr) === String(identifier));
+    return room ? room.id : null;
+}
+
+// Leave workspace
+function leaveWorkspace() {
     if (collaborationState.activeChannel) {
         collaborationState.activeChannel.unsubscribe();
     }
     
+    // Clear workspace tags from local state
+    Object.keys(state.customTags).forEach(roomId => {
+        state.customTags[roomId] = state.customTags[roomId].filter(tag => !tag.workspace);
+    });
+    
     collaborationState.isOnline = false;
+    collaborationState.currentWorkspace = null;
+    collaborationState.currentUser = null;
     collaborationState.connectedUsers.clear();
+    
     updateCollaborationUI();
-}
-
-// Update user presence when working on a room
-async function updateUserPresence(roomId = null) {
-    if (!collaborationState.activeChannel) return;
-
-    try {
-        await collaborationState.activeChannel.track({
-            user_email: collaborationState.currentUser.email,
-            user_name: collaborationState.currentUser.name,
-            online_at: new Date().toISOString(),
-            current_room: roomId
-        });
-    } catch (error) {
-        console.error('Error updating presence:', error);
+    if (typeof updateResults === 'function') {
+        updateResults();
     }
+    
+    showNotification('📡 Disconnected from workspace');
 }
 
-// Make functions available globally
-window.supabaseCollaboration = {
+// Export functions
+window.workspaceCollaboration = {
     initializeSupabase,
-    authenticateUser,
-    initializeCollaboration,
-    saveTagToSupabase,
-    deleteTagFromSupabase,
-    updateUserPresence,
-    cleanupCollaboration,
-    collaborationState,
-    testSupabaseConnection  // Add test function
+    createWorkspace,
+    joinWorkspace,
+    saveTagToWorkspace,
+    removeTagFromWorkspace,
+    leaveWorkspace,
+    collaborationState
 };
