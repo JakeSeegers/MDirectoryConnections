@@ -9,41 +9,13 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
   <link href="style.css" rel="stylesheet">
 
-  <!-- External Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fuse.js/6.6.2/fuse.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
   
-  <!-- Supabase JavaScript Client with fallback -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" 
-          onload="console.log('✅ Supabase library loaded successfully')" 
-          onerror="console.error('❌ Failed to load Supabase library from primary CDN')">
-  </script>
-  
-  <!-- Fallback Supabase CDN -->
-  <script>
-    // Fallback loader for Supabase
-    window.addEventListener('load', function() {
-      if (typeof window.supabase === 'undefined' && typeof createClient === 'undefined') {
-        console.warn('⚠️ Primary Supabase CDN failed, trying fallback...');
-        const fallbackScript = document.createElement('script');
-        fallbackScript.src = 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';
-        fallbackScript.onload = () => console.log('✅ Supabase fallback loaded');
-        fallbackScript.onerror = () => console.error('❌ Supabase fallback also failed');
-        document.head.appendChild(fallbackScript);
-      }
-    });
-  </script>
-
-  <!-- Application Scripts (load after external libraries) -->
-  <script src="config.js"></script>
-  <script src="state.js"></script>
-  <script src="utils.js"></script>
-  <script src="ui.js"></script>
-  <script src="data.js"></script>
-  <script src="supabase-config.js"></script>
-  <script src="app.js"></script>
+  <!-- Supabase JavaScript Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="min-h-screen">
   <div id="loading-overlay">
@@ -129,7 +101,7 @@
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
               </svg>
-              Enable Collaboration
+              Join Workspace
             </button>
           </div>
           
@@ -298,64 +270,182 @@
     </div>
 </main>
 
-  <!-- Collaboration Setup Modal -->
-  <div id="collaboration-modal" class="fixed inset-0 um-modal-backdrop flex items-center justify-center z-50 hidden">
-    <div class="um-modal-content max-w-lg w-full mx-4 p-6 animate-scale-in">
-        <div class="flex items-start justify-between mb-4">
-            <div class="flex">
-                <svg class="w-6 h-6 text-blue-500 mr-3 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-                </svg>
-                <div>
-                    <h3 class="text-lg font-semibold text-um-blue mb-2">Enable Team Collaboration</h3>
-                    <p class="text-sm text-gray-600 mb-3">Join your team workspace to share custom room tags in real-time.</p>
-                </div>
-            </div>
-            <button id="close-collaboration-btn" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+  <!-- NEW WORKSPACE COLLABORATION MODALS -->
+  
+  <!-- Workspace Selection Modal -->
+  <div id="workspace-selection-modal" class="fixed inset-0 um-modal-backdrop flex items-center justify-center z-50 hidden">
+    <div class="um-modal-content max-w-md w-full mx-4 p-6 animate-scale-in">
+      <div class="text-center mb-6">
+        <div class="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+          <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+          </svg>
         </div>
+        <h3 class="text-xl font-bold text-um-blue mb-2">Team Collaboration</h3>
+        <p class="text-gray-600 text-sm">Join a workspace to share tags with your team in real-time</p>
+      </div>
 
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <h4 class="font-semibold text-blue-800 mb-2">How It Works</h4>
-            <ul class="text-sm text-blue-700 space-y-1 list-disc list-inside">
-                <li>Custom tags are shared across your team instantly</li>
-                <li>See who's online and working on room tagging</li>
-                <li>Real-time notifications when tags are added/removed</li>
-                <li>Your data stays secure and private to your team</li>
-            </ul>
-        </div>
+      <div class="space-y-3">
+        <button id="create-workspace-btn" class="w-full py-3 px-4 um-button-blue font-medium rounded-lg shadow-lg button-press flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+          </svg>
+          Create New Workspace
+        </button>
+        
+        <button id="join-workspace-btn" class="w-full py-3 px-4 um-button-maize font-medium rounded-lg shadow-lg button-press flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+          </svg>
+          Join Existing Workspace
+        </button>
+      </div>
 
-        <div class="space-y-4">
-            <div>
-                <label for="collaboration-user-email" class="block text-sm font-medium text-gray-700 mb-1">
-                    Your Email Address <span class="text-red-500">*</span>
-                </label>
-                <input type="email" id="collaboration-user-email" 
-                       placeholder="your.email@umich.edu" 
-                       class="w-full rounded-lg border-gray-300 shadow-sm focus:border-um-blue focus:ring-um-blue py-2 px-3"
-                       required />
-            </div>
-            
-            <div>
-                <label for="collaboration-user-name" class="block text-sm font-medium text-gray-700 mb-1">
-                    Display Name (Optional)
-                </label>
-                <input type="text" id="collaboration-user-name" 
-                       placeholder="Your Name" 
-                       class="w-full rounded-lg border-gray-300 shadow-sm focus:border-um-blue focus:ring-um-blue py-2 px-3" />
-                <p class="text-xs text-gray-500 mt-1">How you'll appear to other team members</p>
-            </div>
-        </div>
-
-        <div class="flex justify-between items-center mt-6">
-            <button id="collaboration-cancel-btn" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
-                Cancel
-            </button>
-            <button id="collaboration-setup-btn" class="px-6 py-2 um-button-blue font-medium rounded-lg shadow-lg button-press">
-                Join Team Workspace
-            </button>
-        </div>
+      <button id="close-workspace-selection-btn" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl">&times;</button>
     </div>
   </div>
+
+  <!-- Create Workspace Modal -->
+  <div id="create-workspace-modal" class="fixed inset-0 um-modal-backdrop flex items-center justify-center z-50 hidden">
+    <div class="um-modal-content max-w-lg w-full mx-4 p-6 animate-scale-in">
+      <div class="flex items-start justify-between mb-4">
+        <div class="flex">
+          <svg class="w-6 h-6 text-green-500 mr-3 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+          </svg>
+          <div>
+            <h3 class="text-lg font-semibold text-um-blue mb-2">Create New Workspace</h3>
+            <p class="text-sm text-gray-600">Create a secure workspace for your team to collaborate on room tagging.</p>
+          </div>
+        </div>
+        <button id="close-create-workspace-btn" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+      </div>
+
+      <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+        <h4 class="font-semibold text-green-800 mb-2">How It Works</h4>
+        <ul class="text-sm text-green-700 space-y-1 list-disc list-inside">
+          <li>You'll be the workspace owner</li>
+          <li>Share the workspace name and password with your team</li>
+          <li>Everyone in the workspace shares tags in real-time</li>
+          <li>Tags are saved securely on the server</li>
+        </ul>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label for="new-workspace-name" class="block text-sm font-medium text-gray-700 mb-1">
+            Workspace Name <span class="text-red-500">*</span>
+          </label>
+          <input type="text" id="new-workspace-name" 
+                 placeholder="e.g., Michigan Medicine Team" 
+                 class="w-full rounded-lg border-gray-300 shadow-sm focus:border-um-blue focus:ring-um-blue py-2 px-3"
+                 required />
+          <p class="text-xs text-gray-500 mt-1">Choose a name your team will recognize</p>
+        </div>
+        
+        <div>
+          <label for="new-workspace-password" class="block text-sm font-medium text-gray-700 mb-1">
+            Password <span class="text-red-500">*</span>
+          </label>
+          <input type="password" id="new-workspace-password" 
+                 placeholder="Create a secure password" 
+                 class="w-full rounded-lg border-gray-300 shadow-sm focus:border-um-blue focus:ring-um-blue py-2 px-3"
+                 required />
+          <p class="text-xs text-gray-500 mt-1">Share this password with your team members</p>
+        </div>
+
+        <div>
+          <label for="workspace-creator-name" class="block text-sm font-medium text-gray-700 mb-1">
+            Your Name <span class="text-red-500">*</span>
+          </label>
+          <input type="text" id="workspace-creator-name" 
+                 placeholder="Your display name" 
+                 class="w-full rounded-lg border-gray-300 shadow-sm focus:border-um-blue focus:ring-um-blue py-2 px-3"
+                 required />
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center mt-6">
+        <button id="create-workspace-cancel-btn" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+          Cancel
+        </button>
+        <button id="create-workspace-confirm-btn" class="px-6 py-2 um-button-blue font-medium rounded-lg shadow-lg button-press">
+          Create Workspace
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Join Workspace Modal -->
+  <div id="join-workspace-modal" class="fixed inset-0 um-modal-backdrop flex items-center justify-center z-50 hidden">
+    <div class="um-modal-content max-w-lg w-full mx-4 p-6 animate-scale-in">
+      <div class="flex items-start justify-between mb-4">
+        <div class="flex">
+          <svg class="w-6 h-6 text-blue-500 mr-3 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013 3v1"/>
+          </svg>
+          <div>
+            <h3 class="text-lg font-semibold text-um-blue mb-2">Join Workspace</h3>
+            <p class="text-sm text-gray-600">Enter the workspace details provided by your team leader.</p>
+          </div>
+        </div>
+        <button id="close-join-workspace-btn" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+      </div>
+
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+        <h4 class="font-semibold text-blue-800 mb-2">Joining a Workspace</h4>
+        <ul class="text-sm text-blue-700 space-y-1 list-disc list-inside">
+          <li>Get the workspace name and password from your team leader</li>
+          <li>You'll instantly see all shared tags</li>
+          <li>Your tags will be shared with the team in real-time</li>
+          <li>You can leave the workspace anytime</li>
+        </ul>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label for="join-workspace-name" class="block text-sm font-medium text-gray-700 mb-1">
+            Workspace Name <span class="text-red-500">*</span>
+          </label>
+          <input type="text" id="join-workspace-name" 
+                 placeholder="Enter workspace name" 
+                 class="w-full rounded-lg border-gray-300 shadow-sm focus:border-um-blue focus:ring-um-blue py-2 px-3"
+                 required />
+        </div>
+        
+        <div>
+          <label for="join-workspace-password" class="block text-sm font-medium text-gray-700 mb-1">
+            Password <span class="text-red-500">*</span>
+          </label>
+          <input type="password" id="join-workspace-password" 
+                 placeholder="Enter workspace password" 
+                 class="w-full rounded-lg border-gray-300 shadow-sm focus:border-um-blue focus:ring-um-blue py-2 px-3"
+                 required />
+        </div>
+
+        <div>
+          <label for="join-user-name" class="block text-sm font-medium text-gray-700 mb-1">
+            Your Name <span class="text-red-500">*</span>
+          </label>
+          <input type="text" id="join-user-name" 
+                 placeholder="Your display name" 
+                 class="w-full rounded-lg border-gray-300 shadow-sm focus:border-um-blue focus:ring-um-blue py-2 px-3"
+                 required />
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center mt-6">
+        <button id="join-workspace-cancel-btn" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+          Cancel
+        </button>
+        <button id="join-workspace-confirm-btn" class="px-6 py-2 um-button-blue font-medium rounded-lg shadow-lg button-press">
+          Join Workspace
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OTHER EXISTING MODALS -->
 
   <div id="mgis-compliance-modal" class="fixed inset-0 um-modal-backdrop flex items-center justify-center z-50 hidden">
     <div class="um-modal-content max-w-2xl w-full mx-4 p-6 animate-scale-in">
@@ -641,6 +731,14 @@
     <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border"> <span data-content="tag-name"></span>
       <button class="ml-2 inline-flex" data-action="remove-custom-tag">&times;</button> </span>
   </template>
+
+  <script src="config.js"></script>
+  <script src="state.js"></script>
+  <script src="utils.js"></script>
+  <script src="ui.js"></script>
+  <script src="data.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="app.js"></script>
 
 </body>
 </html>
