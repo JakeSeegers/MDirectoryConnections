@@ -178,13 +178,22 @@ async function initializeRealtimeCollaboration(workspaceId) {
                 });
                 
                 collaborationState.isOnline = true;
-                updateCollaborationUI();
+                
+                // Update UI if function exists
+                if (typeof updateCollaborationUI === 'function') {
+                    updateCollaborationUI();
+                } else if (typeof window.updateCollaborationUI === 'function') {
+                    window.updateCollaborationUI();
+                }
                 
                 // Load existing workspace tags
                 await syncWorkspaceTags();
                 
                 console.log('✅ Real-time collaboration active');
                 showNotification('✅ Connected to workspace!');
+            } else if (status === 'CHANNEL_ERROR') {
+                console.error('❌ Real-time channel error');
+                showNotification('❌ Connection error - trying to reconnect...');
             }
         });
         
@@ -305,9 +314,11 @@ async function syncWorkspaceTags() {
             }
         });
         
-        // Update UI
+        // Update UI if function exists
         if (typeof updateResults === 'function') {
             updateResults();
+        } else if (typeof window.updateResults === 'function') {
+            window.updateResults();
         }
         
         console.log(`✅ Synced ${tags.length} workspace tags`);
@@ -343,61 +354,17 @@ function updateOnlineUsers(presenceState) {
         });
     });
     
-    updateCollaborationUI();
-}
-
-// Update collaboration UI
-function updateCollaborationUI() {
-    const statusElement = document.getElementById('collaboration-status');
-    if (statusElement && collaborationState.isOnline) {
-        const onlineCount = collaborationState.connectedUsers.size;
-        const workspaceName = collaborationState.currentWorkspace?.name || 'Unknown';
-        
-        statusElement.innerHTML = `
-            <div class="p-3 bg-green-50 border border-green-200 rounded-lg">
-                <h4 class="font-medium text-green-800 mb-2 flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"/>
-                    </svg>
-                    Connected to "${workspaceName}"
-                </h4>
-                <p class="text-green-700 text-sm mb-2">Sharing tags with ${onlineCount} team member${onlineCount !== 1 ? 's' : ''}</p>
-                <div class="space-y-1">
-                    ${Array.from(collaborationState.connectedUsers.values())
-                        .map(user => `
-                            <div class="flex items-center gap-2 text-sm text-green-600">
-                                <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                                ${sanitizeHTML(user.user_name)}
-                            </div>
-                        `).join('')}
-                </div>
-                <button onclick="leaveWorkspace()" class="mt-2 text-xs text-red-600 hover:text-red-800 underline">
-                    Leave Workspace
-                </button>
-            </div>
-        `;
-        statusElement.classList.remove('hidden');
-    } else {
-        if (statusElement) statusElement.classList.add('hidden');
-    }
-    
-    // Update collaboration button
-    const collabButton = document.getElementById('collaboration-btn');
-    if (collabButton) {
-        if (collaborationState.isOnline) {
-            collabButton.textContent = `Connected: ${collaborationState.currentWorkspace?.name}`;
-            collabButton.classList.remove('um-button-blue');
-            collabButton.classList.add('um-button-maize');
-        } else {
-            collabButton.textContent = 'Join Workspace';
-            collabButton.classList.remove('um-button-maize');
-            collabButton.classList.add('um-button-blue');
-        }
+    // Update UI if function exists
+    if (typeof updateCollaborationUI === 'function') {
+        updateCollaborationUI();
+    } else if (typeof window.updateCollaborationUI === 'function') {
+        window.updateCollaborationUI();
     }
 }
 
 // Show notifications
 function showNotification(message) {
+    // Create a toast notification
     const notification = document.createElement('div');
     notification.className = 'fixed top-16 right-4 bg-blue-100 border border-blue-300 text-blue-800 px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in';
     notification.innerHTML = `
@@ -411,6 +378,7 @@ function showNotification(message) {
     
     document.body.appendChild(notification);
     
+    // Remove after 4 seconds
     setTimeout(() => {
         notification.style.opacity = '0';
         setTimeout(() => {
@@ -418,7 +386,7 @@ function showNotification(message) {
                 document.body.removeChild(notification);
             }
         }, 300);
-    }, 3000);
+    }, 4000);
 }
 
 // Utility function to find room by identifier
@@ -445,12 +413,27 @@ function leaveWorkspace() {
     collaborationState.currentUser = null;
     collaborationState.connectedUsers.clear();
     
-    updateCollaborationUI();
+    // Update UI if function exists
+    if (typeof updateCollaborationUI === 'function') {
+        updateCollaborationUI();
+    } else if (typeof window.updateCollaborationUI === 'function') {
+        window.updateCollaborationUI();
+    }
+    
     if (typeof updateResults === 'function') {
         updateResults();
+    } else if (typeof window.updateResults === 'function') {
+        window.updateResults();
     }
     
     showNotification('📡 Disconnected from workspace');
+}
+
+// Utility function for HTML sanitization (if not available globally)
+function sanitizeHTML(text) {
+    const temp = document.createElement('div');
+    temp.textContent = text || '';
+    return temp.innerHTML;
 }
 
 // Export functions
@@ -460,6 +443,7 @@ window.workspaceCollaboration = {
     joinWorkspace,
     saveTagToWorkspace,
     removeTagFromWorkspace,
+    syncWorkspaceTags,  // ← THIS WAS MISSING!
     leaveWorkspace,
     collaborationState
 };
