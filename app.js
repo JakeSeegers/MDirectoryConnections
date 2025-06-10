@@ -1,3 +1,8 @@
+// --- SUPABASE CONFIGURATION ---
+// Add your Supabase credentials here
+const SUPABASE_URL = 'https://pzcqsorfobygydxkdmzc.supabase.co';
+const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6Y3Fzb3Jmb2J5Z3lkeGtkbXpjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTA0NTY1NiwiZXhwIjoyMDY0NjIxNjU2fQ.QLyhYgHbshBHYtrun8G6w4m1dRQvFaw3QfdZnLDePhA';
+
 // --- MAIN APP LOGIC, EVENT LISTENERS, MODAL HANDLING ---
 
 let currentRoomIdForModal = null;
@@ -719,13 +724,35 @@ function setupEventListeners() {
     }
 }
 
-// Initialize workspace collaboration
+// 🎯 FIXED: Initialize workspace collaboration with proper Supabase client creation
 async function initializeWorkspaceCollaboration() {
     if (window.workspaceCollaboration) {
-        const initialized = await window.workspaceCollaboration.initializeSupabase();
-        if (initialized) {
-            console.log('✅ Workspace collaboration system ready');
+        console.log('🔄 Initializing workspace collaboration...');
+        
+        // Create and store the Supabase client properly
+        try {
+            if (window.supabase && typeof window.supabase.createClient === 'function') {
+                // Create the Supabase client with credentials
+                const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+                
+                // Store it in the workspace collaboration object
+                window.workspaceCollaboration.supabase = supabaseClient;
+                
+                console.log('✅ Supabase client created and stored successfully');
+                console.log('✅ Workspace collaboration system ready');
+                
+                return true;
+            } else {
+                console.error('❌ Supabase library not available');
+                return false;
+            }
+        } catch (error) {
+            console.error('❌ Failed to initialize Supabase client:', error);
+            return false;
         }
+    } else {
+        console.error('❌ Workspace collaboration object not found');
+        return false;
     }
 }
 
@@ -775,7 +802,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateDataSummary();        // Direct call to ui.js function
     updateUploadAreaState();    // Direct call to ui.js function
     
-    // Initialize workspace collaboration
+    // 🎯 FIXED: Initialize workspace collaboration with proper client creation
     initializeWorkspaceCollaboration();
     
     // Cleanup on page unload
