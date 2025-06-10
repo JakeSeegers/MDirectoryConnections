@@ -285,25 +285,35 @@ function displayTagInfo(tag) {
 }
 window.displayTagInfo = displayTagInfo; // Make global for ui.js
 
-// 🎯 NEW: Update workspace tagging option visibility
+// 🎯 UPDATED: More robust workspace tagging option
 function updateWorkspaceTaggingOption() {
     const workspaceOption = document.getElementById('workspace-sharing-option');
     const workspaceNameDisplay = document.getElementById('workspace-name-display');
+    const checkbox = document.getElementById('share-to-workspace-checkbox');
     
-    if (window.workspaceCollaboration?.collaborationState?.isOnline) {
-        const workspaceName = window.workspaceCollaboration.collaborationState.currentWorkspace?.name;
+    // Force check current state
+    const isOnline = window.workspaceCollaboration?.collaborationState?.isOnline;
+    const workspace = window.workspaceCollaboration?.collaborationState?.currentWorkspace;
+    
+    console.log('🔍 Workspace check - Online:', isOnline, 'Workspace:', workspace?.name);
+    
+    if (isOnline && workspace) {
         if (workspaceOption && workspaceNameDisplay) {
-            workspaceNameDisplay.textContent = workspaceName || 'Unknown';
+            workspaceNameDisplay.textContent = workspace.name || 'Unknown';
             workspaceOption.style.display = 'block';
+            // Default to checked
+            if (checkbox) checkbox.checked = true;
+            console.log('✅ Showing workspace option for:', workspace.name);
         }
     } else {
         if (workspaceOption) {
             workspaceOption.style.display = 'none';
+            console.log('❌ Hiding workspace option - not connected');
         }
     }
 }
 
-// 🎯 UPDATED: Handle add tag click with workspace option
+// 🎯 UPDATED: Handle add tag click with forced workspace refresh
 function handleAddTagClick(roomId) {
     const room = state.processedData.find(r => r.id.toString() === roomId.toString()) || state.currentFilteredData.find(r => r.id.toString() === roomId.toString());
     if (!room || !elements.customTagModal || !elements.modalRoomInfo) return;
@@ -314,7 +324,12 @@ function handleAddTagClick(roomId) {
     
     updateCustomTagsModalDisplay();
     clearTagForm();
-    updateWorkspaceTaggingOption(); // 🎯 NEW: Update workspace sharing option
+    
+    // 🎯 UPDATED: Force refresh workspace option with delay
+    setTimeout(() => {
+        updateWorkspaceTaggingOption();
+    }, 100);
+    
     elements.customTagModal.classList.remove('hidden');
     if(elements.tagNameInput) elements.tagNameInput.focus();
 }
@@ -384,7 +399,7 @@ function createTagElementInModal(tagData, type, removable) {
     return span;
 }
 
-// 🎯 UPDATED: Add rich tag from modal with workspace sharing option
+// 🎯 UPDATED: Add rich tag from modal with improved workspace sharing
 async function addRichTagFromModal() {
     if (!currentRoomIdForModal) return;
     const name = elements.tagNameInput?.value?.trim() || '';
@@ -398,9 +413,6 @@ async function addRichTagFromModal() {
     const selectedColorEl = document.querySelector('#custom-tag-modal .color-option.selected');
     const color = selectedColorEl ? selectedColorEl.dataset.color : 'blue';
     
-    // 🎯 NEW: Check if user wants to share to workspace
-    const shareToWorkspace = document.getElementById('share-to-workspace-checkbox')?.checked || false;
-    
     const newRichTag = createRichTag(name, type, description, link, contact, imageUrl, color); // Direct call to utils.js function
 
     if (!state.customTags[currentRoomIdForModal]) state.customTags[currentRoomIdForModal] = [];
@@ -411,30 +423,41 @@ async function addRichTagFromModal() {
     // Add to local state first
     state.customTags[currentRoomIdForModal].push(newRichTag);
     
-    // 🎯 NEW: Save to workspace if user chose to share AND connected
-    if (shareToWorkspace && window.workspaceCollaboration.collaborationState.isOnline) {
-        console.log('🔄 Sharing tag to workspace...', newRichTag);
-        try {
-            const success = await window.workspaceCollaboration.saveTagToWorkspace(currentRoomIdForModal, newRichTag);
-            if (success) {
-                // Mark as workspace tag
-                newRichTag.workspace = true;
-                newRichTag.created_by = window.workspaceCollaboration.collaborationState.currentUser?.name;
-                console.log('✅ Tag shared to workspace successfully');
-                
-                // Show success notification
-                const workspaceName = window.workspaceCollaboration.collaborationState.currentWorkspace?.name;
-                showCollaborationNotification(`✅ Tag "${newRichTag.name}" shared with "${workspaceName}"`);
-            } else {
-                console.error('❌ Failed to share tag to workspace');
-                alert('Failed to share tag to workspace. Tag saved locally only.');
+    // 🎯 UPDATED: Double-check workspace connection before sharing
+    const shareToWorkspace = document.getElementById('share-to-workspace-checkbox')?.checked || false;
+
+    if (shareToWorkspace) {
+        // Force re-check connection state
+        const isActuallyOnline = window.workspaceCollaboration?.collaborationState?.isOnline;
+        const hasWorkspace = window.workspaceCollaboration?.collaborationState?.currentWorkspace;
+        
+        console.log('🔍 Pre-share check - Online:', isActuallyOnline, 'Workspace:', hasWorkspace?.name);
+        
+        if (isActuallyOnline && hasWorkspace) {
+            console.log('🔄 Sharing tag to workspace...', newRichTag);
+            try {
+                const success = await window.workspaceCollaboration.saveTagToWorkspace(currentRoomIdForModal, newRichTag);
+                if (success) {
+                    // Mark as workspace tag
+                    newRichTag.workspace = true;
+                    newRichTag.created_by = window.workspaceCollaboration.collaborationState.currentUser?.name;
+                    console.log('✅ Tag shared to workspace successfully');
+                    
+                    // Show success notification
+                    const workspaceName = window.workspaceCollaboration.collaborationState.currentWorkspace?.name;
+                    showCollaborationNotification(`✅ Tag "${newRichTag.name}" shared with "${workspaceName}"`);
+                } else {
+                    console.error('❌ Failed to share tag to workspace');
+                    alert('Failed to share tag to workspace. Tag saved locally only.');
+                }
+            } catch (error) {
+                console.error('❌ Error sharing tag to workspace:', error);
+                alert('Error sharing tag to workspace. Tag saved locally only.');
             }
-        } catch (error) {
-            console.error('❌ Error sharing tag to workspace:', error);
-            alert('Error sharing tag to workspace. Tag saved locally only.');
+        } else {
+            console.warn('⚠️ Connection lost - saving locally only');
+            alert('Connection to workspace lost. Tag saved locally only.');
         }
-    } else if (shareToWorkspace && !window.workspaceCollaboration.collaborationState.isOnline) {
-        alert('Not connected to workspace. Tag saved locally only.');
     }
     
     clearTagForm();
