@@ -1,9 +1,8 @@
-// --- WORKSPACE-BASED COLLABORATION SYSTEM ---
-// Replace your existing supabase-config.js with this workspace approach
+// --- WORKSPACE-BASED COLLABORATION SYSTEM - COMPLETE FIXED VERSION ---
 
 // Supabase configuration
-const SUPABASE_URL = 'https://pzcqsorfobygydxkdmzc.supabase.co';
-const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6Y3Fzb3Jmb2J5Z3lkeGtkbXpjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTA0NTY1NiwiZXhwIjoyMDY0NjIxNjU2fQ.QLyhYgHbshBHYtrun8G6w4m1dRQvFaw3QfdZnLDePhA';
+window.SUPABASE_URL = 'https://pzcqsorfobygydxkdmzc.supabase.co';
+window.SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6Y3Fzb3Jmb2J5Z3lkeGtkbXpjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTA0NTY1NiwiZXhwIjoyMDY0NjIxNjU2fQ.QLyhYgHbshBHYtrun8G6w4m1dRQvFaw3QfdZnLDePhA';
 
 let supabaseClient = null;
 
@@ -16,26 +15,160 @@ const collaborationState = {
     activeChannel: null
 };
 
-// Initialize Supabase
+// Enhanced initialization with multiple fallback strategies
 async function initializeSupabase() {
     try {
         console.log('🔄 Initializing Supabase...');
         
-        // Wait for Supabase library
         let attempts = 0;
-        while (attempts < 30) {
-            if (window.supabase && typeof window.supabase.createClient === 'function') {
-                supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-                console.log('✅ Supabase initialized');
-                return true;
+        const maxAttempts = 100; // 10 seconds
+        
+        while (attempts < maxAttempts) {
+            try {
+                // Strategy 1: Modern CDN pattern
+                if (window.supabase?.createClient) {
+                    supabaseClient = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_SERVICE_KEY);
+                    console.log('✅ Supabase initialized via window.supabase.createClient');
+                    return true;
+                }
+                
+                // Strategy 2: Direct global createClient
+                if (typeof createClient !== 'undefined') {
+                    supabaseClient = createClient(window.SUPABASE_URL, window.SUPABASE_SERVICE_KEY);
+                    console.log('✅ Supabase initialized via global createClient');
+                    return true;
+                }
+                
+                // Strategy 3: Window-attached createClient
+                if (window.createClient) {
+                    supabaseClient = window.createClient(window.SUPABASE_URL, window.SUPABASE_SERVICE_KEY);
+                    console.log('✅ Supabase initialized via window.createClient');
+                    return true;
+                }
+                
+                // Strategy 4: Check for alternative namespace
+                if (window.SupabaseJS?.createClient) {
+                    supabaseClient = window.SupabaseJS.createClient(window.SUPABASE_URL, window.SUPABASE_SERVICE_KEY);
+                    console.log('✅ Supabase initialized via window.SupabaseJS.createClient');
+                    return true;
+                }
+                
+                // Strategy 5: ES modules pattern
+                if (window.supabase && typeof window.supabase === 'object') {
+                    const { createClient } = window.supabase;
+                    if (createClient) {
+                        supabaseClient = createClient(window.SUPABASE_URL, window.SUPABASE_SERVICE_KEY);
+                        console.log('✅ Supabase initialized via destructured createClient');
+                        return true;
+                    }
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 100));
+                attempts++;
+                
+                // Debug logging every 20 attempts (2 seconds)
+                if (attempts % 20 === 0) {
+                    console.log(`🔍 Attempt ${attempts}/${maxAttempts}:`);
+                    console.log('  window.supabase:', window.supabase);
+                    console.log('  typeof createClient:', typeof createClient);
+                    console.log('  window.createClient:', window.createClient);
+                    
+                    // List all potential Supabase-related globals
+                    const potentialGlobals = Object.keys(window).filter(key => 
+                        key.toLowerCase().includes('supabase') || 
+                        key.toLowerCase().includes('create') ||
+                        key.includes('Client')
+                    );
+                    console.log('  Potential globals:', potentialGlobals);
+                }
+                
+            } catch (clientCreationError) {
+                console.error(`❌ Client creation failed on attempt ${attempts}:`, clientCreationError);
+                await new Promise(resolve => setTimeout(resolve, 100));
+                attempts++;
             }
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
         }
         
-        throw new Error('Supabase library not available');
+        throw new Error(`Supabase library not available after ${maxAttempts} attempts (${maxAttempts * 100}ms)`);
+        
     } catch (error) {
         console.error('❌ Supabase initialization failed:', error);
+        
+        // Final debug information
+        console.log('🔍 Final debug info:');
+        console.log('  window.supabase:', window.supabase);
+        console.log('  All window properties containing "supabase":', 
+            Object.keys(window).filter(k => k.toLowerCase().includes('supabase')));
+        console.log('  All window properties containing "create":', 
+            Object.keys(window).filter(k => k.toLowerCase().includes('create')));
+        
+        return false;
+    }
+}
+
+// Initialize workspace collaboration system with better error handling
+async function initializeWorkspaceSystem() {
+    try {
+        console.log('🔄 Initializing workspace system...');
+        
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            await new Promise(resolve => {
+                document.addEventListener('DOMContentLoaded', resolve, { once: true });
+            });
+        }
+        
+        // Wait a bit more for external scripts to load
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Initialize Supabase
+        const supabaseInitialized = await initializeSupabase();
+        if (!supabaseInitialized) {
+            console.warn('⚠️ Supabase failed to initialize - workspace features will be disabled');
+            // Continue without Supabase but mark the system as initialized
+            window.workspaceCollaboration = {
+                collaborationState: { ...collaborationState, isOnline: false },
+                supabase: null,
+                createWorkspace: () => ({ success: false, error: 'Supabase not available' }),
+                joinWorkspace: () => ({ success: false, error: 'Supabase not available' }),
+                leaveWorkspace: () => console.log('No workspace to leave'),
+                saveTagToWorkspace: () => false,
+                removeTagFromWorkspace: () => false,
+                syncWorkspaceTags: () => Promise.resolve()
+            };
+            return false;
+        }
+        
+        // Create workspace collaboration object
+        window.workspaceCollaboration = {
+            collaborationState,
+            supabase: supabaseClient,
+            createWorkspace,
+            joinWorkspace,
+            leaveWorkspace,
+            saveTagToWorkspace,
+            removeTagFromWorkspace,
+            syncWorkspaceTags
+        };
+        
+        console.log('✅ Workspace system initialized successfully');
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Failed to initialize workspace system:', error);
+        
+        // Provide a fallback workspace object
+        window.workspaceCollaboration = {
+            collaborationState: { ...collaborationState, isOnline: false },
+            supabase: null,
+            createWorkspace: () => ({ success: false, error: 'System initialization failed' }),
+            joinWorkspace: () => ({ success: false, error: 'System initialization failed' }),
+            leaveWorkspace: () => console.log('System not initialized'),
+            saveTagToWorkspace: () => false,
+            removeTagFromWorkspace: () => false,
+            syncWorkspaceTags: () => Promise.resolve()
+        };
+        
         return false;
     }
 }
@@ -328,7 +461,7 @@ async function syncWorkspaceTags() {
     }
 }
 
-// 🔧 FIXED: Handle remote tag updates (FIXED PAYLOAD STRUCTURE)
+// Handle remote tag updates
 function handleRemoteTagUpdate(payload) {
     if (payload.payload?.user === collaborationState.currentUser?.name) return;
     
@@ -336,7 +469,7 @@ function handleRemoteTagUpdate(payload) {
     syncWorkspaceTags(); // Refresh tags from server
 }
 
-// 🔧 FIXED: Handle remote tag removal (FIXED PAYLOAD STRUCTURE)
+// Handle remote tag removal
 function handleRemoteTagRemoval(payload) {
     if (payload.payload?.user === collaborationState.currentUser?.name) return;
     
@@ -436,14 +569,115 @@ function sanitizeHTML(text) {
     return temp.innerHTML;
 }
 
-// Export functions
-window.workspaceCollaboration = {
-    initializeSupabase,
-    createWorkspace,
-    joinWorkspace,
-    saveTagToWorkspace,
-    removeTagFromWorkspace,
-    syncWorkspaceTags,  // ← THIS WAS MISSING BEFORE!
-    leaveWorkspace,
-    collaborationState
+// === DEBUGGING AND TESTING FUNCTIONS ===
+
+// Simple test function
+window.testSupabase = async function() {
+    console.log('🧪 Testing Supabase manually...');
+    
+    try {
+        // Try different patterns
+        let client = null;
+        
+        if (window.supabase?.createClient) {
+            client = window.supabase.createClient(
+                'https://pzcqsorfobygydxkdmzc.supabase.co',
+                'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6Y3Fzb3Jmb2J5Z3lkeGtkbXpjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTA0NTY1NiwiZXhwIjoyMDY0NjIxNjU2fQ.QLyhYgHbshBHYtrun8G6w4m1dRQvFaw3QfdZnLDePhA'
+            );
+            console.log('✅ Created client via window.supabase.createClient');
+        } else if (typeof createClient !== 'undefined') {
+            client = createClient(
+                'https://pzcqsorfobygydxkdmzc.supabase.co',
+                'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6Y3Fzb3Jmb2J5Z3lkeGtkbXpjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0OTA0NTY1NiwiZXhwIjoyMDY0NjIxNjU2fQ.QLyhYgHbshBHYtrun8G6w4m1dRQvFaw3QfdZnLDePhA'
+            );
+            console.log('✅ Created client via global createClient');
+        } else {
+            throw new Error('No createClient function found');
+        }
+        
+        // Test the client
+        console.log('🔧 Client created:', client);
+        
+        // Try a simple query to test connection
+        const { data, error } = await client.from('workspaces').select('*').limit(1);
+        if (error) {
+            console.log('⚠️ Query error (expected if table doesn\'t exist):', error);
+        } else {
+            console.log('✅ Query successful:', data);
+        }
+        
+        return client;
+        
+    } catch (error) {
+        console.error('❌ Manual test failed:', error);
+        return null;
+    }
 };
+
+// Debug function
+window.debugSupabase = () => {
+    console.log('=== SUPABASE DEBUG INFO ===');
+    console.log('Current supabaseClient:', supabaseClient);
+    console.log('Current workspaceCollaboration:', window.workspaceCollaboration);
+    console.log('Collaboration state:', collaborationState);
+    
+    // Check if Supabase is loaded at all
+    console.log('Basic availability:');
+    console.log('   window.supabase:', window.supabase);
+    console.log('   typeof createClient:', typeof createClient);
+    console.log('   window.createClient:', window.createClient);
+
+    // Check all globals that might be related
+    const potentialGlobals = Object.keys(window).filter(key => 
+        key.toLowerCase().includes('supabase') || 
+        key.toLowerCase().includes('create') ||
+        key.includes('Client') ||
+        key.includes('client')
+    );
+    console.log('Potential Supabase globals:', potentialGlobals);
+    
+    // Check script tags
+    const scripts = Array.from(document.getElementsByTagName('script'));
+    const supabaseScripts = scripts.filter(script => 
+        script.src && script.src.includes('supabase')
+    );
+    console.log('Supabase scripts found:', supabaseScripts.length);
+    supabaseScripts.forEach(script => {
+        console.log(`   - ${script.src} (loaded: ${script.complete})`);
+    });
+    
+    console.log('=== END DEBUG INFO ===');
+    console.log('Call window.testSupabase() to test manually');
+};
+
+// === INITIALIZATION ===
+
+// Multiple initialization strategies
+function startInitialization() {
+    // Strategy 1: Immediate if DOM is ready
+    if (document.readyState !== 'loading') {
+        initializeWorkspaceSystem();
+    } else {
+        // Strategy 2: Wait for DOM
+        document.addEventListener('DOMContentLoaded', initializeWorkspaceSystem, { once: true });
+    }
+    
+    // Strategy 3: Fallback with window.onload
+    window.addEventListener('load', () => {
+        if (!window.workspaceCollaboration) {
+            console.log('🔄 Fallback initialization triggered by window.onload');
+            initializeWorkspaceSystem();
+        }
+    }, { once: true });
+    
+    // Strategy 4: Final fallback after 5 seconds
+    setTimeout(() => {
+        if (!window.workspaceCollaboration) {
+            console.log('🔄 Final fallback initialization after 5 seconds');
+            initializeWorkspaceSystem();
+        }
+    }, 5000);
+}
+
+// Start initialization immediately
+startInitialization();
