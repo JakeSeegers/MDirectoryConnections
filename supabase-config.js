@@ -1,4 +1,4 @@
-// --- WORKSPACE-BASED COLLABORATION SYSTEM - COMPLETE FIXED VERSION ---
+// --- WORKSPACE-BASED COLLABORATION SYSTEM - FIXED VERSION (NO NAME CONFLICTS) ---
 
 // Supabase configuration
 window.SUPABASE_URL = 'https://pzcqsorfobygydxkdmzc.supabase.co';
@@ -139,16 +139,16 @@ async function initializeWorkspaceSystem() {
             return false;
         }
         
-        // Create workspace collaboration object
+        // Create workspace collaboration object with renamed functions to avoid conflicts
         window.workspaceCollaboration = {
             collaborationState,
             supabase: supabaseClient,
-            createWorkspace,
-            joinWorkspace,
-            leaveWorkspace,
-            saveTagToWorkspace,
-            removeTagFromWorkspace,
-            syncWorkspaceTags
+            createWorkspace: createWorkspaceImpl,  // ← RENAMED to avoid conflict
+            joinWorkspace: joinWorkspaceImpl,      // ← RENAMED to avoid conflict
+            leaveWorkspace: leaveWorkspaceImpl,    // ← RENAMED to avoid conflict
+            saveTagToWorkspace: saveTagToWorkspaceImpl,
+            removeTagFromWorkspace: removeTagFromWorkspaceImpl,
+            syncWorkspaceTags: syncWorkspaceTagsImpl
         };
         
         console.log('✅ Workspace system initialized successfully');
@@ -173,8 +173,8 @@ async function initializeWorkspaceSystem() {
     }
 }
 
-// Create a new workspace
-async function createWorkspace(workspaceName, password, creatorName) {
+// RENAMED: Create a new workspace (was createWorkspace)
+async function createWorkspaceImpl(workspaceName, password, creatorName) {
     if (!supabaseClient) return { success: false, error: 'Supabase not initialized' };
     
     try {
@@ -214,8 +214,8 @@ async function createWorkspace(workspaceName, password, creatorName) {
     }
 }
 
-// Join a workspace
-async function joinWorkspace(workspaceName, password, userName) {
+// RENAMED: Join a workspace (was joinWorkspace)
+async function joinWorkspaceImpl(workspaceName, password, userName) {
     if (!supabaseClient) return { success: false, error: 'Supabase not initialized' };
     
     try {
@@ -299,7 +299,7 @@ async function initializeRealtimeCollaboration(workspaceId) {
                 filter: `workspace_id=eq.${workspaceId}`
             }, (payload) => {
                 console.log('📊 Database change:', payload);
-                syncWorkspaceTags();
+                syncWorkspaceTagsImpl();
             });
         
         await collaborationState.activeChannel.subscribe(async (status) => {
@@ -320,7 +320,7 @@ async function initializeRealtimeCollaboration(workspaceId) {
                 }
                 
                 // Load existing workspace tags
-                await syncWorkspaceTags();
+                await syncWorkspaceTagsImpl();
                 
                 console.log('✅ Real-time collaboration active');
                 showNotification('✅ Connected to workspace!');
@@ -335,8 +335,8 @@ async function initializeRealtimeCollaboration(workspaceId) {
     }
 }
 
-// Save tag to workspace
-async function saveTagToWorkspace(roomId, tagObject) {
+// RENAMED: Save tag to workspace (was saveTagToWorkspace)
+async function saveTagToWorkspaceImpl(roomId, tagObject) {
     if (!supabaseClient || !collaborationState.currentWorkspace) return false;
     
     try {
@@ -379,8 +379,8 @@ async function saveTagToWorkspace(roomId, tagObject) {
     }
 }
 
-// Remove tag from workspace
-async function removeTagFromWorkspace(roomId, tagObject) {
+// RENAMED: Remove tag from workspace (was removeTagFromWorkspace)
+async function removeTagFromWorkspaceImpl(roomId, tagObject) {
     if (!supabaseClient || !collaborationState.currentWorkspace) return false;
     
     try {
@@ -416,8 +416,8 @@ async function removeTagFromWorkspace(roomId, tagObject) {
     }
 }
 
-// Sync workspace tags to local state
-async function syncWorkspaceTags() {
+// RENAMED: Sync workspace tags to local state (was syncWorkspaceTags)
+async function syncWorkspaceTagsImpl() {
     if (!supabaseClient || !collaborationState.currentWorkspace) return;
     
     try {
@@ -466,7 +466,7 @@ function handleRemoteTagUpdate(payload) {
     if (payload.payload?.user === collaborationState.currentUser?.name) return;
     
     showNotification(`${payload.payload?.user} added tag "${payload.payload?.tag?.name}"`);
-    syncWorkspaceTags(); // Refresh tags from server
+    syncWorkspaceTagsImpl(); // Refresh tags from server
 }
 
 // Handle remote tag removal
@@ -474,7 +474,7 @@ function handleRemoteTagRemoval(payload) {
     if (payload.payload?.user === collaborationState.currentUser?.name) return;
     
     showNotification(`${payload.payload?.user} removed tag "${payload.payload?.tag_name}"`);
-    syncWorkspaceTags(); // Refresh tags from server
+    syncWorkspaceTagsImpl(); // Refresh tags from server
 }
 
 // Update online users display
@@ -530,8 +530,8 @@ function findRoomIdByIdentifier(identifier) {
     return room ? room.id : null;
 }
 
-// Leave workspace
-function leaveWorkspace() {
+// RENAMED: Leave workspace (was leaveWorkspace)
+function leaveWorkspaceImpl() {
     if (collaborationState.activeChannel) {
         collaborationState.activeChannel.unsubscribe();
     }
