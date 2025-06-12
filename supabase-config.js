@@ -202,13 +202,30 @@ async function initializeRealtimeCollaboration(workspaceId) {
     }
 }
 
-// Save tag to workspace
+// Save tag to workspace (DEBUG VERSION)
 async function saveTagToWorkspace(roomId, tagObject) {
-    if (!supabaseClient || !collaborationState.currentWorkspace) return false;
+    console.log('🔍 saveTagToWorkspace called with:', { roomId, tagObject });
+    
+    if (!supabaseClient) {
+        console.error('❌ supabaseClient not initialized');
+        return false;
+    }
+    
+    if (!collaborationState.currentWorkspace) {
+        console.error('❌ No current workspace');
+        return false;
+    }
+    
+    console.log('✅ Basic checks passed');
     
     try {
         const room = state.processedData.find(r => r.id === roomId);
-        if (!room) return false;
+        console.log('🔍 Found room:', room);
+        
+        if (!room) {
+            console.error('❌ Room not found for ID:', roomId);
+            return false;
+        }
         
         const tagData = {
             workspace_id: collaborationState.currentWorkspace.id,
@@ -220,28 +237,52 @@ async function saveTagToWorkspace(roomId, tagObject) {
             created_at: new Date().toISOString()
         };
         
-        const { error } = await supabaseClient
-            .from('workspace_tags')
-            .insert(tagData);
-            
-        if (error) throw error;
+        console.log('🔍 Inserting tag data:', tagData);
         
-        // Broadcast to other users
-        await collaborationState.activeChannel.send({
+        const { data, error } = await supabaseClient
+            .from('workspace_tags')
+            .insert(tagData)
+            .select(); // Add select to see what was inserted
+            
+        if (error) {
+            console.error('❌ Database insert error:', error);
+            throw error;
+        }
+        
+        console.log('✅ Database insert successful:', data);
+        
+        // Check if channel exists
+        if (!collaborationState.activeChannel) {
+            console.error('❌ No active channel for broadcast');
+            return false;
+        }
+        
+        console.log('🔍 Broadcasting tag to channel...');
+        
+        // Broadcast to other users via realtime
+        const broadcastResult = await collaborationState.activeChannel.send({
             type: 'broadcast',
             event: 'tag_added',
             payload: {
                 room_id: roomId,
                 tag: tagObject,
-                user: collaborationState.currentUser.name
+                user: collaborationState.currentUser.name,
+                timestamp: new Date().toISOString()
             }
         });
         
-        console.log('✅ Tag saved to workspace:', tagObject.name);
+        console.log('✅ Broadcast result:', broadcastResult);
+        console.log('✅ Tag saved to workspace and broadcast:', tagObject.name);
         return true;
         
     } catch (error) {
         console.error('❌ Error saving tag to workspace:', error);
+        console.error('❌ Error details:', {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint
+        });
         return false;
     }
 }
