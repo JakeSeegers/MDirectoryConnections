@@ -1,5 +1,5 @@
-// --- WORKSPACE-BASED COLLABORATION SYSTEM (BROADCAST ONLY VERSION) ---
-// This version works without needing Replication/Publications access
+// --- WORKSPACE-BASED COLLABORATION SYSTEM ---
+// Replace your existing supabase-config.js with this workspace approach
 
 // Supabase configuration
 const SUPABASE_URL = 'https://pzcqsorfobygydxkdmzc.supabase.co';
@@ -123,7 +123,7 @@ async function joinWorkspace(workspaceName, password, userName) {
     }
 }
 
-// 🎯 FIXED: Initialize real-time collaboration (BROADCAST ONLY)
+// Initialize real-time collaboration for workspace
 async function initializeRealtimeCollaboration(workspaceId) {
     try {
         const channelName = `workspace_${workspaceId}`;
@@ -146,20 +146,27 @@ async function initializeRealtimeCollaboration(workspaceId) {
                 showNotification(`${leftPresences[0].user_name} left the workspace`);
             });
         
-        // 🎯 CHANGED: Use broadcast instead of postgres_changes
+        // Subscribe to tag updates
         collaborationState.activeChannel
             .on('broadcast', { event: 'tag_added' }, (payload) => {
-                console.log('📥 Tag added broadcast:', payload);
+                console.log('📥 Tag added:', payload);
                 handleRemoteTagUpdate(payload);
             })
             .on('broadcast', { event: 'tag_removed' }, (payload) => {
-                console.log('📥 Tag removed broadcast:', payload);
+                console.log('📥 Tag removed:', payload);
                 handleRemoteTagRemoval(payload);
-            })
-            .on('broadcast', { event: 'workspace_sync_request' }, async (payload) => {
-                console.log('📥 Sync request received:', payload);
-                // Send our current tags to new user
-                await broadcastCurrentTags();
+            });
+        
+        // Subscribe to database changes for this workspace
+        collaborationState.activeChannel
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'workspace_tags',
+                filter: `workspace_id=eq.${workspaceId}`
+            }, (payload) => {
+                console.log('📊 Database change:', payload);
+                syncWorkspaceTags();
             });
         
         await collaborationState.activeChannel.subscribe(async (status) => {
@@ -179,18 +186,8 @@ async function initializeRealtimeCollaboration(workspaceId) {
                     window.updateCollaborationUI();
                 }
                 
-                // 🎯 CHANGED: Load existing workspace tags from database
+                // Load existing workspace tags
                 await syncWorkspaceTags();
-                
-                // 🎯 NEW: Request sync from other users
-                await collaborationState.activeChannel.send({
-                    type: 'broadcast',
-                    event: 'workspace_sync_request',
-                    payload: {
-                        user: collaborationState.currentUser.name,
-                        timestamp: new Date().toISOString()
-                    }
-                });
                 
                 console.log('✅ Real-time collaboration active');
                 showNotification('✅ Connected to workspace!');
@@ -205,56 +202,13 @@ async function initializeRealtimeCollaboration(workspaceId) {
     }
 }
 
-// 🎯 NEW: Broadcast current tags to other users
-async function broadcastCurrentTags() {
-    if (!collaborationState.activeChannel || !collaborationState.currentWorkspace) return;
-    
-    try {
-        // Get all workspace tags for this workspace
-        const { data: tags, error } = await supabaseClient
-            .from('workspace_tags')
-            .select('*')
-            .eq('workspace_id', collaborationState.currentWorkspace.id);
-            
-        if (error) throw error;
-        
-        // Broadcast tags to channel
-        await collaborationState.activeChannel.send({
-            type: 'broadcast',
-            event: 'workspace_tags_sync',
-            payload: {
-                tags: tags,
-                user: collaborationState.currentUser.name
-            }
-        });
-        
-    } catch (error) {
-        console.error('❌ Error broadcasting current tags:', error);
-    }
-}
-
 // Save tag to workspace
 async function saveTagToWorkspace(roomId, tagObject) {
-    console.log('🔄 Starting saveTagToWorkspace:', { roomId, tagObject });
-    
-    if (!supabaseClient) {
-        console.error('❌ Supabase client not initialized');
-        return false;
-    }
-    
-    if (!collaborationState.currentWorkspace) {
-        console.error('❌ No active workspace');
-        return false;
-    }
+    if (!supabaseClient || !collaborationState.currentWorkspace) return false;
     
     try {
-        console.log('🔍 Looking for room:', roomId);
         const room = state.processedData.find(r => r.id === roomId);
-        if (!room) {
-            console.error('❌ Room not found:', roomId);
-            return false;
-        }
-        console.log('✅ Room found:', { roomId: room.id, rmrecnbr: room.rmrecnbr });
+        if (!room) return false;
         
         const tagData = {
             workspace_id: collaborationState.currentWorkspace.id,
@@ -265,45 +219,29 @@ async function saveTagToWorkspace(roomId, tagObject) {
             created_by: collaborationState.currentUser.name,
             created_at: new Date().toISOString()
         };
-        console.log('📝 Prepared tag data:', tagData);
         
-        console.log('💾 Inserting tag into database...');
-        const { data, error } = await supabaseClient
+        const { error } = await supabaseClient
             .from('workspace_tags')
-            .insert(tagData)
-            .select();
+            .insert(tagData);
             
-        if (error) {
-            console.error('❌ Database error:', error);
-            throw error;
-        }
-        console.log('✅ Tag inserted successfully:', data);
+        if (error) throw error;
         
-        // Broadcast to other users via realtime
-        console.log('📢 Broadcasting tag to other users...');
-        const broadcastResult = await collaborationState.activeChannel.send({
+        // Broadcast to other users
+        await collaborationState.activeChannel.send({
             type: 'broadcast',
             event: 'tag_added',
             payload: {
                 room_id: roomId,
                 tag: tagObject,
-                user: collaborationState.currentUser.name,
-                timestamp: new Date().toISOString()
+                user: collaborationState.currentUser.name
             }
         });
-        console.log('✅ Broadcast result:', broadcastResult);
         
-        console.log('✅ Tag saved and broadcast complete:', tagObject.name);
+        console.log('✅ Tag saved to workspace:', tagObject.name);
         return true;
         
     } catch (error) {
-        console.error('❌ Error in saveTagToWorkspace:', {
-            error: error.message,
-            code: error.code,
-            details: error.details,
-            hint: error.hint,
-            stack: error.stack
-        });
+        console.error('❌ Error saving tag to workspace:', error);
         return false;
     }
 }
@@ -332,12 +270,11 @@ async function removeTagFromWorkspace(roomId, tagObject) {
             payload: {
                 room_id: roomId,
                 tag_name: tagObject.name,
-                user: collaborationState.currentUser.name,
-                timestamp: new Date().toISOString()
+                user: collaborationState.currentUser.name
             }
         });
         
-        console.log('✅ Tag removed from workspace and broadcast:', tagObject.name);
+        console.log('✅ Tag removed from workspace:', tagObject.name);
         return true;
         
     } catch (error) {
@@ -391,7 +328,7 @@ async function syncWorkspaceTags() {
     }
 }
 
-// Handle remote tag updates (FIXED PAYLOAD STRUCTURE)
+// 🔧 FIXED: Handle remote tag updates (FIXED PAYLOAD STRUCTURE)
 function handleRemoteTagUpdate(payload) {
     if (payload.payload?.user === collaborationState.currentUser?.name) return;
     
@@ -399,7 +336,7 @@ function handleRemoteTagUpdate(payload) {
     syncWorkspaceTags(); // Refresh tags from server
 }
 
-// Handle remote tag removal (FIXED PAYLOAD STRUCTURE)
+// 🔧 FIXED: Handle remote tag removal (FIXED PAYLOAD STRUCTURE)
 function handleRemoteTagRemoval(payload) {
     if (payload.payload?.user === collaborationState.currentUser?.name) return;
     
@@ -506,7 +443,7 @@ window.workspaceCollaboration = {
     joinWorkspace,
     saveTagToWorkspace,
     removeTagFromWorkspace,
-    syncWorkspaceTags,
+    syncWorkspaceTags,  // ← THIS WAS MISSING BEFORE!
     leaveWorkspace,
     collaborationState
 };
