@@ -235,11 +235,26 @@ async function broadcastCurrentTags() {
 
 // Save tag to workspace
 async function saveTagToWorkspace(roomId, tagObject) {
-    if (!supabaseClient || !collaborationState.currentWorkspace) return false;
+    console.log('🔄 Starting saveTagToWorkspace:', { roomId, tagObject });
+    
+    if (!supabaseClient) {
+        console.error('❌ Supabase client not initialized');
+        return false;
+    }
+    
+    if (!collaborationState.currentWorkspace) {
+        console.error('❌ No active workspace');
+        return false;
+    }
     
     try {
+        console.log('🔍 Looking for room:', roomId);
         const room = state.processedData.find(r => r.id === roomId);
-        if (!room) return false;
+        if (!room) {
+            console.error('❌ Room not found:', roomId);
+            return false;
+        }
+        console.log('✅ Room found:', { roomId: room.id, rmrecnbr: room.rmrecnbr });
         
         const tagData = {
             workspace_id: collaborationState.currentWorkspace.id,
@@ -250,15 +265,23 @@ async function saveTagToWorkspace(roomId, tagObject) {
             created_by: collaborationState.currentUser.name,
             created_at: new Date().toISOString()
         };
+        console.log('📝 Prepared tag data:', tagData);
         
-        const { error } = await supabaseClient
+        console.log('💾 Inserting tag into database...');
+        const { data, error } = await supabaseClient
             .from('workspace_tags')
-            .insert(tagData);
+            .insert(tagData)
+            .select();
             
-        if (error) throw error;
+        if (error) {
+            console.error('❌ Database error:', error);
+            throw error;
+        }
+        console.log('✅ Tag inserted successfully:', data);
         
-        // 🎯 FIXED: Broadcast to other users via realtime
-        await collaborationState.activeChannel.send({
+        // Broadcast to other users via realtime
+        console.log('📢 Broadcasting tag to other users...');
+        const broadcastResult = await collaborationState.activeChannel.send({
             type: 'broadcast',
             event: 'tag_added',
             payload: {
@@ -268,12 +291,19 @@ async function saveTagToWorkspace(roomId, tagObject) {
                 timestamp: new Date().toISOString()
             }
         });
+        console.log('✅ Broadcast result:', broadcastResult);
         
-        console.log('✅ Tag saved to workspace and broadcast:', tagObject.name);
+        console.log('✅ Tag saved and broadcast complete:', tagObject.name);
         return true;
         
     } catch (error) {
-        console.error('❌ Error saving tag to workspace:', error);
+        console.error('❌ Error in saveTagToWorkspace:', {
+            error: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint,
+            stack: error.stack
+        });
         return false;
     }
 }
